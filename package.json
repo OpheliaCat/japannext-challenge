@@ -1,6 +1,7 @@
 {
   "name": "dds",
   "version": "1.0.0",
+  "type": "module",
   "description": "## Requirements - 3 application types: `Distributor`, `Feeder`, `Client` - Each application can be done in a different programming language, out of c, cpp, golang, rust, c#, java, js, node.js",
   "main": "distributor.js",
   "scripts": {
