@@ -95,3 +95,5 @@ pub:market-data/TSE/Sony:close=13315
 
 ### Final image of the record
 ltp=13315,ltq=300,volume=4551300,close=13315,volume=4551000,prev_close=13475,high52w=14915,low52w=11050,adv30d=4507635,vol30d=32.48
+
+### some changes
