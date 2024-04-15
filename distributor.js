@@ -5,22 +5,21 @@ const resources = {
     'market-data': {
         'TSE': {
             'Sony': {
-                ltp: { value: 0, feeders: new Set(), clients: new Set() },
-                ltq: { value: 0, feeders: new Set(), clients: new Set() },
-                open: { value: 0, feeders: new Set(), clients: new Set() },
-                high: { value: 0, feeders: new Set(), clients: new Set() },
-                low: { value: 0, feeders: new Set(), clients: new Set() },
+                ltp: 0 ,
+                ltq: 0,
+                open: 0,
+                high: 0,
+                low: 0,
             }
         }
     },
 };
 
+const ads = {};
+const subs = {};
+
 // Create a WebSocket server
 const wss = new WebSocket.Server({ port: 8080 });
-
-const feeders = new Set();
-const clients = new Set();
-
 
 // Event listener for new connections
 wss.on('connection', (ws, req) => {
@@ -34,37 +33,35 @@ wss.on('connection', (ws, req) => {
     // pub:market-data/TSE/Sony:ltp=13335,ltq=500,open=13475,high=13535,low=13290
     ws.on('message', ({ data, origin }) => {  
         console.log('Received message:', data, 'from', origin);
-        [command, topic, data] = String(data).trim().split(':');
-        topics = topic.split('/');
-        dataPairs = String(data).split(':')[-1].split(',');
+        const [command, topic, dataPairs] = String(data).trim().split(':');
+        let endpoint = '';
     
         switch (command) {
             case 'adv':
                 // advertise
-                console.log('Advertise:', topic);
-                resources
+                console.log('%s made an advertisemenmt for %s: ', ip, topic);
+                ads[topic] = ads[topic] ? ads[topic].add(ws) : new Set([ws]);
                 break;
             case 'sub':
                 // subscribe
-                console.log('Subscribe:', topic);
-                clients.add(ip);
+                dataPairs.split(',').forEach(pair => {
+                    endpoint = `${topic}/${pair.split('=')[0]}`;
+                    console.log('%s has subscribed to %s: ', ip, endpoint);
+                    subs[endpoint] = subs[endpoint] ? subs[endpoint].add(ws) : new Set([ws]);
+                });
                 break;
             case 'pub':
                 // publish
-                feeders.add(ip);
-                dataPairs = String(data).split(':')[-1].split(',');
-                dataPairs.forEach(pair => {
-                    [key, value] = pair.split('=');
-                    console.log('Publish:', topic, key, value);
-                    wss.clients.forEach(c => {
-                        if (c.readyState === WebSocket.OPEN && clients.has(c._socket.remoteAddress)) {
-                            c.send(`pub:${topic}:${key}=${value}`);
-                        }
-                    });
+                console.log('Publish:', topic, dataPairs);
+                dataPairs.split(',').forEach(pair => {
+                    endpoint = `${topic}/${pair.split('=')[0]}`;
+                    console.log('%s has published new data for %s: ', ip, endpoint);
+                    if (endpoint in subs) {
+                        subs[endpoint].forEach(client => {
+                            if (client.readyState === WebSocket.OPEN) client.send(`pub:${topic}:${pair}`);
+                        });
+                    }
                 });
-                if (!data) {
-                    break;
-                }
                 break;
             default:
                 console.log('Unknown command:', command);
