@@ -15,25 +15,41 @@ const resources = {
     },
 };
 
-const ads = {};
-const subs = {};
+const subs = {};  // MAP { 'market-data/TSE/Sony': Set { ws1, ws2, ws3 } }
+const ads = {};   // MAP { 'ip1': Set { regex1, regex2, regex3 } }
+
+const saveSub = (topic, key, ws) => {
+    const endpoint = `${topic}/${key}`;
+    subs[endpoint] = subs[endpoint] ? subs[endpoint].add(ws) : new Set([ws]);
+    console.log('%s has subscribed to %s: ', ws._socket.remoteAddress, endpoint);
+};
+
+const saveAd = (topicRegex, ws) => {
+    const ip = ws._socket.remoteAddress;
+    ads[ip] = ads[ip] ? ads[ip].add(topicRegex) : new Set([topicRegex]);
+    console.log('%s has advertised for %s: ', ip, topicRegex);
+};
 
 const writeValue = (topic, key, value) => {
+    const ip = ws._socket.remoteAddress;
+    endpoint = `${topic}/${key}`;
+    if (!ads[ip] || !ads[ip].reduce((acc, regex) => acc || new RegExp(regex).test(endpoint), false)){
+        return false;
+    };
+    console.log('%s has published new data for %s: ', ip, endpoint);
     let ref = resources;
     topic.split('/').forEach(segment => {
         ref = ref[segment];
     });
     ref[key] = value;
+    return true;
 };
 
 // Create a WebSocket server
 const wss = new WebSocket.Server({ port: 8080 });
 
 // Event listener for new connections
-wss.on('connection', (ws, req) => {
-    // Get the client socket address
-    const ip = req.socket.remoteAddress;
-    console.log('Client socket address:', ip);
+wss.on('connection', ws => {
     // Event listener for incoming messages
     // message examples: 
     // adv:market-data/TSE/.*  
@@ -47,25 +63,23 @@ wss.on('connection', (ws, req) => {
         switch (command) {
             case 'adv':
                 // advertise
-                console.log('%s made an advertisemenmt for %s: ', ip, topic);
-                ads[topic] = ads[topic] ? ads[topic].add(ws) : new Set([ws]);
+                saveAd(topic, ws);
                 break;
             case 'sub':
                 // subscribe
                 dataPairs.split(',').forEach(pair => {
-                    endpoint = `${topic}/${pair.split('=')[0]}`;
-                    console.log('%s has subscribed to %s: ', ip, endpoint);
-                    subs[endpoint] = subs[endpoint] ? subs[endpoint].add(ws) : new Set([ws]);
+                    saveSub(topic, pair.split('=')[0], ws);
                 });
                 break;
             case 'pub':
                 // publish
                 dataPairs.split(',').forEach(pair => {
                     const [key, value] = pair.split('='); // [ltp, 13335]
-                    endpoint = `${topic}/${key}`;
-                    console.log('%s has published new data for %s: ', ip, endpoint);
-                    writeValue(topic, key, value);
-                    if (endpoint in subs) {
+                    if (!writeValue(topic, key, value)) {
+                        ws.send(`err: not a valid publisher for ${endpoint}`);
+                        return;
+                    };
+                    if (subs.has(endpoint)) {
                         subs[endpoint].forEach(client => {
                             if (client.readyState === WebSocket.OPEN) client.send(`pub:${topic}:${pair}`);
                         });
