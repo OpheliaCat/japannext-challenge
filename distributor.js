@@ -35,6 +35,19 @@ wss.on('connection', (ws, req) => {
                 // publish
                 feeders.add(ip);
                 dataPairs = String(data).split(':')[-1].split(',');
+                dataPairs.forEach(pair => {
+                    [key, value] = pair.split('=');
+                    console.log('Publish:', topic, key, value);
+                    clients.forEach(client => {
+                        if (client !== ip) {
+                            wss.clients.forEach(function each(client) {
+                                if (client.readyState === WebSocket.OPEN && clients.has(client._socket.remoteAddress)) {
+                                    client.send(`pub:${topic}:${key}=${value}`);
+                                }
+                            });
+                        }
+                    });
+                });
                 if (!data) {
                     break;
                 }
