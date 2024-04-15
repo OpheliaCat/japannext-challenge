@@ -18,6 +18,14 @@ const resources = {
 const ads = {};
 const subs = {};
 
+const writeValue = (topic, key, value) => {
+    let ref = resources;
+    topic.split('/').forEach(segment => {
+        ref = ref[segment];
+    });
+    ref[key] = value;
+};
+
 // Create a WebSocket server
 const wss = new WebSocket.Server({ port: 8080 });
 
@@ -52,10 +60,11 @@ wss.on('connection', (ws, req) => {
                 break;
             case 'pub':
                 // publish
-                console.log('Publish:', topic, dataPairs);
                 dataPairs.split(',').forEach(pair => {
-                    endpoint = `${topic}/${pair.split('=')[0]}`;
+                    const [key, value] = pair.split('='); // [ltp, 13335]
+                    endpoint = `${topic}/${key}`;
                     console.log('%s has published new data for %s: ', ip, endpoint);
+                    writeValue(topic, key, value);
                     if (endpoint in subs) {
                         subs[endpoint].forEach(client => {
                             if (client.readyState === WebSocket.OPEN) client.send(`pub:${topic}:${pair}`);
