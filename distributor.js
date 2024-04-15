@@ -1,10 +1,26 @@
 const WebSocket = require('ws');
 
+//  json like obj for testing
+const resources = {
+    'market-data': {
+        'TSE': {
+            'Sony': {
+                ltp: { value: 0, feeders: new Set(), clients: new Set() },
+                ltq: { value: 0, feeders: new Set(), clients: new Set() },
+                open: { value: 0, feeders: new Set(), clients: new Set() },
+                high: { value: 0, feeders: new Set(), clients: new Set() },
+                low: { value: 0, feeders: new Set(), clients: new Set() },
+            }
+        }
+    },
+};
+
 // Create a WebSocket server
 const wss = new WebSocket.Server({ port: 8080 });
 
 const feeders = new Set();
 const clients = new Set();
+
 
 // Event listener for new connections
 wss.on('connection', (ws, req) => {
@@ -18,13 +34,15 @@ wss.on('connection', (ws, req) => {
     // pub:market-data/TSE/Sony:ltp=13335,ltq=500,open=13475,high=13535,low=13290
     ws.on('message', ({ data, origin }) => {  
         console.log('Received message:', data, 'from', origin);
-        [command, topic, data] = String(data).split(':');
-        topic = String(data).substring(String(data).indexOf(':')+1);
+        [command, topic, data] = String(data).trim().split(':');
+        topics = topic.split('/');
+        dataPairs = String(data).split(':')[-1].split(',');
+    
         switch (command) {
             case 'adv':
                 // advertise
                 console.log('Advertise:', topic);
-                feeders.add(ip);
+                resources
                 break;
             case 'sub':
                 // subscribe
@@ -38,13 +56,9 @@ wss.on('connection', (ws, req) => {
                 dataPairs.forEach(pair => {
                     [key, value] = pair.split('=');
                     console.log('Publish:', topic, key, value);
-                    clients.forEach(client => {
-                        if (client !== ip) {
-                            wss.clients.forEach(function each(client) {
-                                if (client.readyState === WebSocket.OPEN && clients.has(client._socket.remoteAddress)) {
-                                    client.send(`pub:${topic}:${key}=${value}`);
-                                }
-                            });
+                    wss.clients.forEach(c => {
+                        if (c.readyState === WebSocket.OPEN && clients.has(c._socket.remoteAddress)) {
+                            c.send(`pub:${topic}:${key}=${value}`);
                         }
                     });
                 });
@@ -66,7 +80,7 @@ wss.on('connection', (ws, req) => {
 });
 
 const interval = setInterval(function ping() {
-    wss.clients.forEach(function each(ws) {
+    wss.clients.forEach(ws => {
         if (ws.isAlive === false) return ws.terminate();
 
         ws.isAlive = false;
