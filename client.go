@@ -3,11 +3,14 @@ package main
 import (
 	"fmt"
 	"log"
+	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
 
 func main() {
+	mu := &sync.Mutex{}
 	// Create a new WebSocket dialer
 	dialer := websocket.DefaultDialer
 
@@ -26,7 +29,9 @@ func main() {
 				log.Println("Failed to read message from WebSocket:", err)
 				return
 			}
+			mu.Lock()
 			fmt.Println("Received message:", string(message))
+			mu.Unlock()
 		}
 	}()
 
@@ -34,8 +39,10 @@ func main() {
 	for {
 		// Read a line from console input
 		var input string
+		mu.Lock()
 		fmt.Print("Enter a message: ")
 		_, err = fmt.Scanln(&input)
+		mu.Unlock()
 		if err != nil {
 			log.Println("Failed to read input:", err)
 			continue
@@ -45,5 +52,6 @@ func main() {
 			log.Println("Failed to send message:", err)
 			continue
 		}
+		time.Sleep(time.Second)
 	}
 }
